@@ -193,12 +193,18 @@ class Robot:
             self.turn_left()
 
 
+class AStarDriver:
+    def step(self, robot, board):
+        robot.string_to_movement(board)
+
+
 def main():
     board = BoardLoader.from_file("boards/file.txt")
     rows = len(board.grid)
     cols = len(board.grid[0])
     robot = Robot(board.start, board.goal, (rows, cols))
-    emulator = Emulator(board, robot, robot.string_to_movement)
+    driver = AStarDriver()
+    emulator = Emulator(board, robot, driver)
     result = emulator.run()
     print(result)
     Result(robot).statusReport()

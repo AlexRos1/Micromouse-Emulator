@@ -80,11 +80,16 @@ class BoardLoader:
                     elif char == 'G':
                         goal = (i, j)
                         maze_2d[i][j] = " " 
-                    elif char in ('|', '+', '-'):
+                    elif char in ('|', '+', '-', '#'):
                         maze_2d[i][j] = 1
                     else:
                         maze_2d[i][j] = " "
         
+        if start is None:
+            raise ValueError(f"No start position 'S' found in {filename}")
+        if goal is None:
+            raise ValueError(f"No goal position 'G' found in {filename}")
+
         return Board(maze_2d, start, goal)
 
 
