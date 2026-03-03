@@ -1,180 +1,177 @@
-from romi import Romi
+import heapq
 import time
-import board
-import digitalio
-from adafruit_debouncer import Debouncer
 
-pin = digitalio.DigitalInOut(board.IO14)
-pin.direction = digitalio.Direction.INPUT
-pin.pull = digitalio.Pull.UP
-switch = Debouncer(pin)
+# ---------------------------------------------------------------------------
+# Pre-mapped 10 x 10 maze
+#   1 = wall   0 = open cell
+#   Start (S): (1, 1)   Goal (G): (8, 8)
+#   All border cells are walls, matching the physical maze boundary.
+# ---------------------------------------------------------------------------
 
-robot = Romi()
-# robot._getStatus()  
+SIZE  = 10
+START = (1, 1)
+GOAL  = (8, 8)
 
-# AVAILABLE FUNCTIONS
-# moveSquare() - moves 10 inches
-# turnRight() - turns 90 degrees
-# turnLeft() - turns -90 degrees
-# frontWall() - returns 1 if the the front sensor detects a wall in the occupied square
+MAZE = [
+    [1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+    [1, 0, 0, 0, 1, 0, 0, 0, 0, 1],
+    [1, 0, 1, 0, 1, 0, 1, 1, 0, 1],
+    [1, 0, 1, 0, 0, 0, 0, 1, 0, 1],
+    [1, 0, 1, 1, 1, 1, 0, 1, 0, 1],
+    [1, 0, 0, 0, 0, 1, 0, 0, 0, 1],
+    [1, 1, 1, 1, 0, 1, 1, 1, 0, 1],
+    [1, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+    [1, 0, 1, 1, 1, 1, 1, 0, 0, 1],
+    [1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+]
 
-DIR = ["N", "E", "S", "W"]
-STACK = []
-
+DIR   = ["N", "E", "S", "W"]
 DELTA = {
-    "N": (-1, 0),
-    "E": (0, 1),
-    "S": (1, 0),
-    "W": (0, -1)
+    "N": (-1,  0),
+    "E": ( 0,  1),
+    "S": ( 1,  0),
+    "W": ( 0, -1),
 }
 
-SIZE = 10
-visited = [[False for _ in range(SIZE)] for _ in range(SIZE)]
+# ---------------------------------------------------------------------------
+# Display
+# ---------------------------------------------------------------------------
 
-def create_board():
-    b = [["*" for _ in range(10)] for _ in range(10)]
-    for i in range(10):
-        b[i][9] = "1"
-        b[9][i] = "1"
-        b[i][0] = "1"
-        b[0][i] = "1"
-    return b
-
-def print_board(b):
+def print_board(path=None):
+    path_set = set(path) if path else set()
     print()
-    for r in b:
-        print(" ".join(r))
+    for r in range(SIZE):
+        row_str = ""
+        for c in range(SIZE):
+            if (r, c) == START:
+                row_str += "S "
+            elif (r, c) == GOAL:
+                row_str += "G "
+            elif (r, c) in path_set:
+                row_str += ". "
+            elif MAZE[r][c] == 1:
+                row_str += "# "
+            else:
+                row_str += "  "
+        print(row_str)
     print()
 
-maze = create_board()
+# ---------------------------------------------------------------------------
+# A* pathfinding
+# ---------------------------------------------------------------------------
 
-start_r = 1
-start_c = 1
-row = start_r
-col = start_c
+def heuristic(a, b):
+    return abs(a[0] - b[0]) + abs(a[1] - b[1])
 
-direction = 0  # 0 is starting N, 1 is E...
 
-#Temporary Solution
-def is_left():
-    print("Turning Left")
-    robot.turnLeft()
-    result = robot.frontWall() == 1   
-    if result:
-        print("I see a wall")
-    print("Return Straight")
-    robot.turnRight()
-    time.sleep(2)
-    return result
-    
-  #Temporary Solution  
-def is_right():
-    print("Turning Right")
-    robot.turnRight()
-    result = robot.frontWall() == 1   
-    if result:
-        print("I see a wall")
-    print("Return Straight")
-    robot.turnLeft()
-    time.sleep(2)
-    return result
-    
-#Temporary Solution
-def detect_walls():
-    global row, col, direction
+def astar():
+    frontier = []
+    heapq.heappush(frontier, (0, START))
 
-    front = robot.frontWall()
-    left = is_left()
-    right = is_right()
+    came_from   = {START: None}
+    cost_so_far = {START: 0}
 
-	#When we add sensors, delete function
+    while frontier:
+        _, current = heapq.heappop(frontier)
 
-    # FRONT
-    if front:
-        dr, dc = DELTA[DIR[direction]]
-        nr = row + dr
-        nc = col + dc
-        if 0 <= nr < SIZE and 0 <= nc < SIZE:
-            maze[nr][nc] = "1"
+        if current == GOAL:
+            path = []
+            while current is not None:
+                path.append(current)
+                current = came_from[current]
+            path.reverse()
+            return path
 
-    # LEFT
-    left_dir = (direction - 1) % 4
-    if left:
-        dr, dc = DELTA[DIR[left_dir]]
-        nr = row + dr
-        nc = col + dc
-        if 0 <= nr < SIZE and 0 <= nc < SIZE:
-            maze[nr][nc] = "1"
+        r, c = current
+        for dr, dc in [(-1, 0), (0, 1), (1, 0), (0, -1)]:
+            nr, nc = r + dr, c + dc
+            if 0 <= nr < SIZE and 0 <= nc < SIZE and MAZE[nr][nc] != 1:
+                new_cost = cost_so_far[current] + 1
+                if (nr, nc) not in cost_so_far or new_cost < cost_so_far[(nr, nc)]:
+                    cost_so_far[(nr, nc)] = new_cost
+                    priority = new_cost + heuristic((nr, nc), GOAL)
+                    heapq.heappush(frontier, (priority, (nr, nc)))
+                    came_from[(nr, nc)] = current
 
-    # RIGHT
-    right_dir = (direction + 1) % 4
-    if right:
-        dr, dc = DELTA[DIR[right_dir]]
-        nr = row + dr
-        nc = col + dc
-        if 0 <= nr < SIZE and 0 <= nc < SIZE:
-            maze[nr][nc] = "1"
-            
-def turn_to(new_dir):
-    global direction
-    # Turn right until facing new_dir
-    while direction != new_dir:
-        robot.turnRight()  # only allowed turn function
-        direction = (direction + 1) % 4
-        time.sleep(0.1)
+    return None
 
-def move_forward():
-    global row, col
-    robot.moveSquare() 
-    dr, dc = DELTA[DIR[direction]]
-    row += dr
-    col += dc
-    time.sleep(0.5)
-    
-def explore():
-    global row, col
+# ---------------------------------------------------------------------------
+# Path -> robot command string  (F = forward, L = turn left, R = turn right)
+# Inspired by Robot.py generate_path()
+# ---------------------------------------------------------------------------
 
-    visited[row][col] = True
-    maze[row][col] = "V"
-    print_board(maze)
+def path_to_commands(path):
+    if not path:
+        return ""
 
-    detect_walls()
+    commands  = []
+    direction = "N"   # robot starts facing North
 
-    for new_dir in range(4):
+    for i in range(len(path) - 1):
+        dr = path[i + 1][0] - path[i][0]
+        dc = path[i + 1][1] - path[i][1]
 
-        dr, dc = DELTA[new_dir]
-        new_r = row + dr
-        new_c = col + dc
+        needed = next(d for d, delta in DELTA.items() if delta == (dr, dc))
 
-        if maze[new_r][new_c] == "1":
-            continue
+        while direction != needed:
+            ci = DIR.index(direction)
+            ni = DIR.index(needed)
+            if (ni - ci) % 4 <= (ci - ni) % 4:
+                commands.append("R")
+                direction = DIR[(ci + 1) % 4]
+            else:
+                commands.append("L")
+                direction = DIR[(ci - 1) % 4]
 
-        if visited[new_r][new_c]:
-            continue
+        commands.append("F")
 
-        stack.append((row, col))
+    return "".join(commands)
 
-        turn_to(new_dir)
-        move_forward()
+# ---------------------------------------------------------------------------
+# Main - stress test: compute A* on the pre-mapped maze without moving
+# ---------------------------------------------------------------------------
 
-        explore()  
+STEP_TIME = 0.7   # seconds per forward move (physical estimate)
+TURN_TIME = 1.4   # seconds per 90-degree turn (physical estimate)
 
-        prev_r, prev_c = stack.pop()
+print("=" * 42)
+print("  MICROMOUSE A* STRESS TEST")
+print("  Pre-mapped maze -- no movement")
+print("=" * 42)
 
-        for d in range(4):
-            if row + DELTA[d][0] == prev_r and col + DELTA[d][1] == prev_c:
-                turn_to(d)
-                break
+print("\nMaze layout:")
+print_board()
 
-        move_forward()
-    
-while True:
-    switch.update()
-    if switch.fell:
-        print("Beginning Exploration")
-        maze[row][col] = "X"
-        print_board(maze)
-        detect_walls()
-        print_board(maze)
-    time.sleep(0.01)
+t0   = time.monotonic()
+path = astar()
+t1   = time.monotonic()
 
+elapsed_ms = (t1 - t0) * 1000
+
+if path is None:
+    print("ERROR: No path found from", START, "to", GOAL)
+else:
+    commands  = path_to_commands(path)
+    num_steps = commands.count("F")
+    num_turns = commands.count("R") + commands.count("L")
+    est_time  = num_steps * STEP_TIME + num_turns * TURN_TIME
+
+    print("Optimal path:")
+    print_board(path)
+
+    print("Path cells   :", path)
+    print("Commands     :", commands)
+    print(f"Cells visited: {len(path)}")
+    print(f"Steps  (F)   : {num_steps}")
+    print(f"Turns  (R/L) : {num_turns}")
+    print(f"A* compute   : {elapsed_ms:.3f} ms")
+
+    print()
+    print("=" * 42)
+    print("  ESTIMATED PHYSICAL RUN TIME")
+    print("=" * 42)
+    print(f"  Forward moves : {num_steps:>3}  x {STEP_TIME}s = {num_steps * STEP_TIME:>6.2f}s")
+    print(f"  Turns         : {num_turns:>3}  x {TURN_TIME}s = {num_turns * TURN_TIME:>6.2f}s")
+    print(f"  {'─' * 36}")
+    print(f"  Total         :              {est_time:>6.2f}s")
+    print("=" * 42)
