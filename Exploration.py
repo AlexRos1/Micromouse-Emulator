@@ -83,9 +83,11 @@ def is_right():
 def detect_walls():
     global row, col, direction
 
+    print(f"[detect_walls] At ({row}, {col}), facing {DIR[direction]}")
     front = robot.frontWall()
     left = is_left()
     right = is_right()
+    print(f"[detect_walls] Results - front: {bool(front)}, left: {bool(left)}, right: {bool(right)}")
 
 	#When we add sensors, delete function
 
@@ -95,6 +97,7 @@ def detect_walls():
         nr = row + dr
         nc = col + dc
         if 0 <= nr < SIZE and 0 <= nc < SIZE:
+            print(f"[detect_walls] Wall detected FRONT at ({nr}, {nc})")
             maze[nr][nc] = "1"
 
     # LEFT
@@ -104,6 +107,7 @@ def detect_walls():
         nr = row + dr
         nc = col + dc
         if 0 <= nr < SIZE and 0 <= nc < SIZE:
+            print(f"[detect_walls] Wall detected LEFT at ({nr}, {nc})")
             maze[nr][nc] = "1"
 
     # RIGHT
@@ -113,27 +117,34 @@ def detect_walls():
         nr = row + dr
         nc = col + dc
         if 0 <= nr < SIZE and 0 <= nc < SIZE:
+            print(f"[detect_walls] Wall detected RIGHT at ({nr}, {nc})")
             maze[nr][nc] = "1"
             
 def turn_to(new_dir):
     global direction
+    print(f"[turn_to] Turning from {DIR[direction]} to {DIR[new_dir]}")
     # Turn right until facing new_dir
     while direction != new_dir:
         robot.turnRight()  # only allowed turn function
         direction = (direction + 1) % 4
+        print(f"[turn_to] Now facing {DIR[direction]}")
         time.sleep(0.1)
+    print(f"[turn_to] Reached target direction {DIR[direction]}")
 
 def move_forward():
     global row, col
-    robot.moveSquare() 
+    print(f"[move_forward] Moving from ({row}, {col}) facing {DIR[direction]}")
+    robot.moveSquare()
     dr, dc = DELTA[DIR[direction]]
     row += dr
     col += dc
+    print(f"[move_forward] Arrived at ({row}, {col})")
     time.sleep(0.5)
     
 def explore():
     global row, col
 
+    print(f"[explore] Visiting ({row}, {col}), stack depth: {len(STACK)}")
     visited[row][col] = True
     maze[row][col] = "V"
     print_board(maze)
@@ -147,19 +158,23 @@ def explore():
         new_c = col + dc
 
         if maze[new_r][new_c] == "1":
+            print(f"[explore] Skipping direction {DIR[new_dir]}: wall at ({new_r}, {new_c})")
             continue
 
         if visited[new_r][new_c]:
+            print(f"[explore] Skipping direction {DIR[new_dir]}: already visited ({new_r}, {new_c})")
             continue
 
+        print(f"[explore] Going {DIR[new_dir]} to ({new_r}, {new_c})")
         stack.append((row, col))
 
         turn_to(new_dir)
         move_forward()
 
-        explore()  
+        explore()
 
         prev_r, prev_c = stack.pop()
+        print(f"[explore] Backtracking to ({prev_r}, {prev_c})")
 
         for d in range(4):
             if row + DELTA[d][0] == prev_r and col + DELTA[d][1] == prev_c:
@@ -167,6 +182,7 @@ def explore():
                 break
 
         move_forward()
+    print(f"[explore] Done exploring from ({row}, {col})")
     
 while True:
     switch.update()
