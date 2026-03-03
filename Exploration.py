@@ -112,6 +112,19 @@ def astar():
     return None
 
 # ---------------------------------------------------------------------------
+# Execute a pre-built command string on a robot object
+# ---------------------------------------------------------------------------
+
+def solve(commands, robot):
+    actions = {
+        "F": robot.move_forward,
+        "R": robot.turn_right,
+        "L": robot.turn_left,
+    }
+    for cmd in commands:
+        actions[cmd]()
+
+# ---------------------------------------------------------------------------
 # Path -> robot command string  (F = forward, L = turn left, R = turn right)
 # Inspired by Robot.py generate_path()
 # ---------------------------------------------------------------------------
