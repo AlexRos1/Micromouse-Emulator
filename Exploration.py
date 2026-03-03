@@ -190,7 +190,8 @@ while True:
         print("Beginning Exploration")
         maze[row][col] = "X"
         print_board(maze)
-        detect_walls()
+        explore()
+        print("Exploration Complete")
         print_board(maze)
     time.sleep(0.01)
 
