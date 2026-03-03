@@ -1,5 +1,21 @@
-import heapq
 import time
+
+# ---------------------------------------------------------------------------
+# Minimal priority queue (replaces heapq, which is absent in CircuitPython)
+# ---------------------------------------------------------------------------
+
+def _pq_push(pq, item):
+    pq.append(item)
+
+def _pq_pop(pq):
+    min_idx = 0
+    for i in range(1, len(pq)):
+        if pq[i][0] < pq[min_idx][0]:
+            min_idx = i
+    item = pq[min_idx]
+    pq[min_idx] = pq[-1]
+    pq.pop()
+    return item
 
 # ---------------------------------------------------------------------------
 # Pre-mapped 10 x 10 maze
@@ -66,13 +82,13 @@ def heuristic(a, b):
 
 def astar():
     frontier = []
-    heapq.heappush(frontier, (0, START))
+    _pq_push(frontier, (0, START))
 
     came_from   = {START: None}
     cost_so_far = {START: 0}
 
     while frontier:
-        _, current = heapq.heappop(frontier)
+        _, current = _pq_pop(frontier)
 
         if current == GOAL:
             path = []
@@ -90,7 +106,7 @@ def astar():
                 if (nr, nc) not in cost_so_far or new_cost < cost_so_far[(nr, nc)]:
                     cost_so_far[(nr, nc)] = new_cost
                     priority = new_cost + heuristic((nr, nc), GOAL)
-                    heapq.heappush(frontier, (priority, (nr, nc)))
+                    _pq_push(frontier, (priority, (nr, nc)))
                     came_from[(nr, nc)] = current
 
     return None
