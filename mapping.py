@@ -42,6 +42,10 @@ DELTA = {
     "W": ( 0, -1),
 }
 
+START_DIR = "S"               # robot starts facing South
+STEP_TIME = 0.7               # seconds per forward move (physical estimate)
+TURN_TIME = 1.4               # seconds per 90-degree turn (physical estimate)
+
 def print_board(path=None):
     path_set = set(path) if path else set()
     print()
@@ -61,37 +65,50 @@ def print_board(path=None):
         print(row_str)
     print()
 
-def heuristic(a, b):
-    return abs(a[0] - b[0]) + abs(a[1] - b[1])
+def _turns_needed(from_dir, to_dir):
+    """Minimum 90-degree turns to rotate from *from_dir* to *to_dir*."""
+    ci = DIR.index(from_dir)
+    ni = DIR.index(to_dir)
+    return min((ni - ci) % 4, (ci - ni) % 4)
+
+def heuristic(pos, goal):
+    """Admissible time heuristic -- every remaining cell costs at least STEP_TIME."""
+    return (abs(pos[0] - goal[0]) + abs(pos[1] - goal[1])) * STEP_TIME
 
 def astar():
+    """A* over (row, col, facing) states so turn cost is part of the search."""
+    start_state = (START[0], START[1], START_DIR)
     frontier = []
-    _pq_push(frontier, (0, START))
+    _pq_push(frontier, (0, start_state))
 
-    came_from   = {START: None}
-    cost_so_far = {START: 0}
+    came_from   = {start_state: None}
+    cost_so_far = {start_state: 0}
 
     while frontier:
         _, current = _pq_pop(frontier)
 
-        if current == GOAL:
+        r, c, facing = current
+
+        if (r, c) == GOAL:
             path = []
             while current is not None:
-                path.append(current)
+                path.append((current[0], current[1]))
                 current = came_from[current]
             path.reverse()
             return path
 
-        r, c = current
-        for dr, dc in [(-1, 0), (0, 1), (1, 0), (0, -1)]:
+        for d, (dr, dc) in DELTA.items():
             nr, nc = r + dr, c + dc
             if 0 <= nr < SIZE and 0 <= nc < SIZE and MAZE[nr][nc] != 1:
-                new_cost = cost_so_far[current] + 1
-                if (nr, nc) not in cost_so_far or new_cost < cost_so_far[(nr, nc)]:
-                    cost_so_far[(nr, nc)] = new_cost
+                turns     = _turns_needed(facing, d)
+                move_cost = turns * TURN_TIME + STEP_TIME
+                new_cost  = cost_so_far[current] + move_cost
+                next_state = (nr, nc, d)
+                if next_state not in cost_so_far or new_cost < cost_so_far[next_state]:
+                    cost_so_far[next_state] = new_cost
                     priority = new_cost + heuristic((nr, nc), GOAL)
-                    _pq_push(frontier, (priority, (nr, nc)))
-                    came_from[(nr, nc)] = current
+                    _pq_push(frontier, (priority, next_state))
+                    came_from[next_state] = current
 
     return None
 
@@ -133,11 +150,8 @@ def path_to_commands(path):
 
 # Main
 
-STEP_TIME = 0.7   # seconds per forward move (physical estimate)
-TURN_TIME = 1.4   # seconds per 90-degree turn (physical estimate)
-
 print("=" * 42)
-print("  MICROMOUSE A* STRESS TEST")
+print("  MICROMOUSE TIME-BASED A* STRESS TEST")
 print("  Pre-mapped maze -- no movement")
 print("=" * 42)
 
@@ -158,7 +172,7 @@ else:
     num_turns = commands.count("R") + commands.count("L")
     est_time  = num_steps * STEP_TIME + num_turns * TURN_TIME
 
-    print("Optimal path:")
+    print("Time-optimal path:")
     print_board(path)
 
     #print("Path cells   :", path)

@@ -3,44 +3,64 @@ import heapq
 
 
 # ---------------------------------------------------------------------------
-# A* helpers
+# A* helpers  (time-based: turns cost TURN_TIME, forward costs STEP_TIME)
 # ---------------------------------------------------------------------------
 
-def heuristic(a, b):
-    return abs(a[0] - b[0]) + abs(a[1] - b[1])
+STEP_TIME = 0.7   # seconds per forward move
+TURN_TIME = 1.4   # seconds per 90-degree turn
+
+_DIR   = ["N", "E", "S", "W"]
+_DELTA = {"N": (-1, 0), "E": (0, 1), "S": (1, 0), "W": (0, -1)}
 
 
-def astar(grid, start, goal):
+def _turns_needed(from_dir, to_dir):
+    """Minimum 90-degree turns to rotate from *from_dir* to *to_dir*."""
+    ci = _DIR.index(from_dir)
+    ni = _DIR.index(to_dir)
+    return min((ni - ci) % 4, (ci - ni) % 4)
+
+
+def heuristic(pos, goal):
+    """Admissible time heuristic -- every remaining cell costs at least STEP_TIME."""
+    return (abs(pos[0] - goal[0]) + abs(pos[1] - goal[1])) * STEP_TIME
+
+
+def astar(grid, start, goal, start_dir="N"):
+    """A* over (row, col, facing) states so turn cost is part of the search."""
     rows = len(grid)
     cols = len(grid[0])
 
+    start_state = (start[0], start[1], start_dir)
     frontier = []
-    heapq.heappush(frontier, (0, start))
+    heapq.heappush(frontier, (0, start_state))
 
-    came_from   = {start: None}
-    cost_so_far = {start: 0}
+    came_from   = {start_state: None}
+    cost_so_far = {start_state: 0}
 
     while frontier:
         _, current = heapq.heappop(frontier)
 
-        if current == goal:
+        r, c, facing = current
+
+        if (r, c) == goal:
             path = []
-            while current:
-                path.append(current)
+            while current is not None:
+                path.append((current[0], current[1]))
                 current = came_from[current]
             return list(reversed(path))
 
-        r, c = current
-        for dr, dc in [(-1, 0), (0, 1), (1, 0), (0, -1)]:
+        for d, (dr, dc) in _DELTA.items():
             nr, nc = r + dr, c + dc
-            if 0 <= nr < rows and 0 <= nc < cols:
-                if grid[nr][nc] != 1:
-                    new_cost = cost_so_far[current] + 1
-                    if (nr, nc) not in cost_so_far or new_cost < cost_so_far[(nr, nc)]:
-                        cost_so_far[(nr, nc)] = new_cost
-                        priority = new_cost + heuristic((nr, nc), goal)
-                        heapq.heappush(frontier, (priority, (nr, nc)))
-                        came_from[(nr, nc)] = current
+            if 0 <= nr < rows and 0 <= nc < cols and grid[nr][nc] != 1:
+                turns     = _turns_needed(facing, d)
+                move_cost = turns * TURN_TIME + STEP_TIME
+                new_cost  = cost_so_far[current] + move_cost
+                next_state = (nr, nc, d)
+                if next_state not in cost_so_far or new_cost < cost_so_far[next_state]:
+                    cost_so_far[next_state] = new_cost
+                    priority = new_cost + heuristic((nr, nc), goal)
+                    heapq.heappush(frontier, (priority, next_state))
+                    came_from[next_state] = current
 
     return None
 
@@ -73,7 +93,7 @@ class Robot:
     # ------------------------------------------------------------------
 
     def generate_path(self, board):
-        path = astar(board.grid, self.start_pos, self.goal_pos)
+        path = astar(board.grid, self.start_pos, self.goal_pos, self.direction)
         if not path:
             return ""
 
